@@ -1,0 +1,143 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Profile {
+  id         String   @id @db.Uuid
+  email      String   @unique
+  fullName   String?  @map("full_name")
+  role       String   @default("support")
+  avatarUrl  String?  @map("avatar_url")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  
+  // Relations
+  patients       Patient[]       @relation("DoctorPatients")
+  appointments   Appointment[]   @relation("DoctorAppointments")
+  messages       Message[]       @relation("SenderMessages")
+  patientFiles   PatientFile[]   @relation("UploaderFiles")
+  medicalNotes   MedicalNote[]   @relation("AuthorNotes")
+
+  @@map("profiles")
+}
+
+model Patient {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firstName        String   @map("first_name")
+  lastName         String   @map("last_name")
+  email            String?
+  phone            String?
+  dateOfBirth      DateTime? @map("date_of_birth") @db.Date
+  gender           String?
+  address          String?
+  assignedDoctorId String?  @map("assigned_doctor_id") @db.Uuid
+  status           String   @default("active")
+  tags             String[] @default([])
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  
+  // Relations
+  assignedDoctor   Profile?       @relation("DoctorPatients", fields: [assignedDoctorId], references: [id])
+  appointments     Appointment[]  @relation("PatientAppointments")
+  conversations    Conversation[] @relation("PatientConversations")
+  files            PatientFile[]  @relation("PatientFiles")
+  medicalNotes     MedicalNote[]  @relation("PatientNotes")
+
+  @@map("patients")
+}
+
+model Appointment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId   String   @map("patient_id") @db.Uuid
+  doctorId    String   @map("doctor_id") @db.Uuid
+  title       String
+  description String?
+  startTime   DateTime @map("start_time") @db.Timestamptz(6)
+  endTime     DateTime @map("end_time") @db.Timestamptz(6)
+  status      String   @default("scheduled")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  
+  // Relations
+  patient     Patient  @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Profile  @relation("DoctorAppointments", fields: [doctorId], references: [id])
+
+  @@map("appointments")
+}
+
+model Conversation {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId     String?   @map("patient_id") @db.Uuid
+  participants  String[]  @db.Uuid
+  title         String?
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  
+  // Relations
+  patient       Patient?  @relation("PatientConversations", fields: [patientId], references: [id])
+  messages      Message[] @relation("ConversationMessages")
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  senderId       String       @map("sender_id") @db.Uuid
+  content        String
+  messageType    String       @default("text") @map("message_type")
+  fileUrl        String?      @map("file_url")
+  fileName       String?      @map("file_name")
+  fileSize       BigInt?      @map("file_size")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  // Relations
+  conversation   Conversation @relation("ConversationMessages", fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         Profile      @relation("SenderMessages", fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model PatientFile {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String   @map("patient_id") @db.Uuid
+  fileName  String   @map("file_name")
+  fileUrl   String   @map("file_url")
+  fileType  String   @map("file_type")
+  fileSize  BigInt   @map("file_size")
+  uploadedBy String  @map("uploaded_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  // Relations
+  patient   Patient  @relation("PatientFiles", fields: [patientId], references: [id], onDelete: Cascade)
+  uploader  Profile  @relation("UploaderFiles", fields: [uploadedBy], references: [id])
+
+  @@map("patient_files")
+}
+
+model MedicalNote {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId String   @map("patient_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  title     String
+  content   String
+  tags      String[] @default([])
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  
+  // Relations
+  patient   Patient  @relation("PatientNotes", fields: [patientId], references: [id], onDelete: Cascade)
+  author    Profile  @relation("AuthorNotes", fields: [authorId], references: [id])
+
+  @@map("medical_notes")
+}
